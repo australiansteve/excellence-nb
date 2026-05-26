@@ -1,8 +1,22 @@
 import { chromium, Browser, Page } from 'playwright';
 
 const FORM_URL = 'https://prettyform.addxt.com/a/form/vf/1FAIpQLSfjpkfptJsqvq33PTUdcbAUl1_yWxfGip1DaFfJBRybNG8XEw';
-const TARGET_BUSINESS = 'Bubbles Haircare for Kids - Saint John';
-const TARGET_CATEGORY = 'Services - Best Barber/Hairdresser';
+
+interface Vote {
+  category: string;
+  business: string;
+}
+
+const VOTES: Vote[] = [
+  {
+    category: 'Services - Best Barber/Hairdresser',
+    business: 'Bubbles Haircare for Kids - Saint John'
+  },
+  {
+    category: 'Services - Best Local Gym/Crossfit',
+    business: 'Afterburn Performance - Saint John'
+  }
+];
 
 interface VoteConfig {
   email: string;
@@ -18,69 +32,14 @@ async function submitVote(page: Page, email: string): Promise<void> {
   const emailInput = page.locator('input[type="text"][placeholder="Your email address"]');
   await emailInput.fill(email);
 
-  // Step 2: Click Next until we reach Services category
-  console.log('Step 2: Clicking Next to navigate to Services category...');
-  let pageCount = 0;
-  let categoryFound = false;
-
-  while (!categoryFound && pageCount < 10) {
-    // Check if we're on the Services - Best Barber/Hairdresser category
-    const categoryLabel = page.locator(`xpath=//div[contains(@class, "MuiGrid-item")][.//div[contains(normalize-space(), "${TARGET_CATEGORY}")]]`);
-    if (await categoryLabel.isVisible()) {
-      console.log(`Found target category: ${TARGET_CATEGORY}`);
-      categoryFound = true;
-      break;
-    }
-
-    // Click Next button
-    const nextButton = page.locator('button:has-text("Next")').first();
-    if (await nextButton.isVisible()) {
-      console.log(`Clicking Next (page ${pageCount + 1})...`);
-      await nextButton.click();
-      pageCount++;
-    } else {
-      throw new Error('Could not find Next button');
-    }
-  }
-
-  if (!categoryFound) {
-    throw new Error(`Could not find target category: ${TARGET_CATEGORY}`);
-  }
-
-  // Step 3: Select the business from dropdown (MUI Select component)
-  console.log(`Step 3: Selecting business: ${TARGET_BUSINESS}...`);
-  
-  // Find the grid item containing the category, then find the listbox within it
-  const selectField = page.locator(`xpath=//div[contains(@class, "MuiGrid-item")][.//div[contains(normalize-space(), "${TARGET_CATEGORY}")]]//div[@role="button"][@aria-haspopup="listbox"]`).first();
-  
-  if (!await selectField.isVisible()) {
-    throw new Error('Could not find dropdown select field for category');
-  }
-  
-  await selectField.click();
-  await page.waitForSelector('li[role="option"]');
-  
-  // Find and click the option containing the business name
-  const businessOption = page.locator(`xpath=//li[@role="option" and contains(normalize-space(), "${TARGET_BUSINESS}")]`).first();
-  
-  if (!await businessOption.isVisible()) {
-    throw new Error(`Could not find business option: ${TARGET_BUSINESS}`);
-  }
-  
-  await businessOption.click();
-
-  console.log('Step 4: Clicking Next to continue...');
-  const nextButton = page.locator('button:has-text("Next")').first();
-  await nextButton.click();
-
-  // Step 5: Click Next several more times and look for "Staying up to date" question
-  console.log('Step 5: Navigating through remaining pages...');
+  // Step 2: Navigate through pages, selecting votes as we encounter them
+  console.log('Step 2: Processing voting pages...');
   let stayingUpToDateFound = false;
-  let clickCount = 0;
-  const maxClicks = 15;
+  let pageCount = 0;
+  const maxPages = 20;
 
-  while (!stayingUpToDateFound && clickCount < maxClicks) {
-    // Check for the "Staying up to date" question
+  while (!stayingUpToDateFound && pageCount < maxPages) {
+    // Check if we've reached the "Staying up to date" question
     const questionLabel = page.locator('text=Staying up to date');
     if (await questionLabel.isVisible()) {
       console.log('Found "Staying up to date" question');
@@ -88,24 +47,65 @@ async function submitVote(page: Page, email: string): Promise<void> {
       break;
     }
 
-    const nextBtn = page.locator('button:has-text("Next")');
-    if (await nextBtn.isVisible()) {
-      console.log(`Clicking Next (click ${clickCount + 1})...`);
-      await nextBtn.click();
-      clickCount++;
-    } else {
-      // No more next buttons, might be on a different question type
-      console.log('No visible Next button, checking for other navigation elements...');
-      break;
+    // Check which votes are available on this page
+    let votesProcessedOnPage = false;
+
+    for (const vote of VOTES) {
+      const categoryLabel = page.locator(`xpath=//div[contains(@class, "MuiGrid-item")][.//div[contains(normalize-space(), "${vote.category}")]]`);
+      
+      if (await categoryLabel.isVisible()) {
+        console.log(`Found category on page ${pageCount + 1}: ${vote.category}`);
+        
+        // Find and click the dropdown
+        const selectField = page.locator(`xpath=//div[contains(@class, "MuiGrid-item")][.//div[contains(normalize-space(), "${vote.category}")]]//div[@role="button"][@aria-haspopup="listbox"]`).first();
+        
+        if (!await selectField.isVisible()) {
+          throw new Error(`Could not find dropdown for category: ${vote.category}`);
+        }
+        
+        await selectField.click();
+        await page.waitForSelector('li[role="option"]');
+        
+        // Find and click the business option
+        const businessOption = page.locator(`xpath=//li[@role="option" and contains(normalize-space(), "${vote.business}")]`).first();
+        
+        if (!await businessOption.isVisible()) {
+          throw new Error(`Could not find business option: ${vote.business}`);
+        }
+        
+        await businessOption.click();
+        console.log(`Selected: ${vote.business}`);
+        votesProcessedOnPage = true;
+      }
     }
+
+    // If we found and processed votes on this page, click Next
+    if (votesProcessedOnPage) {
+      console.log(`All available votes processed on page ${pageCount + 1}, clicking Next...`);
+      const nextButton = page.locator('button:has-text("Next")').first();
+      if (await nextButton.isVisible()) {
+        await nextButton.click();
+      }
+    } else {
+      // No votes found on this page, just click Next
+      console.log(`No configured votes on page ${pageCount + 1}, clicking Next...`);
+      const nextButton = page.locator('button:has-text("Next")').first();
+      if (await nextButton.isVisible()) {
+        await nextButton.click();
+      } else {
+        throw new Error('Could not find Next button');
+      }
+    }
+
+    pageCount++;
   }
 
   if (!stayingUpToDateFound) {
     throw new Error('Could not find "Staying up to date" question');
   }
 
-  // Step 6: Select "No" for the "Staying up to date" question
-  console.log('Step 6: Selecting "No" for "Staying up to date" question...');
+  // Step 3: Select "No" for the "Staying up to date" question
+  console.log('Step 3: Selecting "No" for "Staying up to date" question...');
   
   // Find the radiogroup and select the second input (No option)
   const radioGroup = page.locator('[role="radiogroup"]').first();
@@ -123,8 +123,8 @@ async function submitVote(page: Page, email: string): Promise<void> {
   
   await noRadio.click();
 
-  // Step 7: Submit the form
-  console.log('Step 7: Submitting the form...');
+  // Step 4: Submit the form
+  console.log('Step 4: Submitting the form...');
   const submitButton = page.locator('button:has-text("Submit")').first();
   
   if (!await submitButton.isVisible()) {
@@ -133,8 +133,8 @@ async function submitVote(page: Page, email: string): Promise<void> {
   
   await submitButton.click();
   
-  // Step 8: Validate successful submission
-  console.log('Step 8: Validating submission confirmation...');
+  // Step 5: Validate successful submission
+  console.log('Step 5: Validating submission confirmation...');
   const successMessage = page.locator('text=Your submission has been received.');
   await successMessage.waitFor({ state: 'visible', timeout: 5000 });
   
