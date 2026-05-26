@@ -15,6 +15,26 @@ const VOTES: Vote[] = [
   {
     category: 'Services - Best Local Gym/Crossfit',
     business: 'Afterburn Performance - Saint John'
+  },
+  {
+    category: 'Food & Drink - Best Cafe',
+    business: 'Kaffeine Espresso Bar - Bathurst'
+  },
+  {
+    category: 'Food & Drink - Best Distillery',
+    business: 'New Brunswick Distillery - Bathurst'
+  },
+  {
+    category: 'Food & Drink - Best Bar',
+    business: 'Au Bootlegger - Bathurst'
+  },
+  {
+    category: 'Food & Drink - Best Poutine',
+    business: 'Au Bootlegger - Bathurst'
+  },
+  {
+    category: 'Experiences - Best Patio',
+    business: 'Au Bootlegger - Bathurst'
   }
 ];
 
